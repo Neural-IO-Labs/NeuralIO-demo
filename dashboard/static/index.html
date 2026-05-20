@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neural:IO Command Center</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+    <div class="glass-overlay"></div>
+    <div class="app-layout">
+        <!-- Sidebar Navigation -->
+        <!-- Sidebar Navigation -->
+        <nav class="sidebar">
+            <div class="brand">
+                <div class="logo-icon">
+                    <img src="logo.png" alt="Neural:IO"
+                        style="height: 32px; filter: drop-shadow(0 0 5px rgba(0,242,255,0.5));">
+                </div>
+                <span>Neural:IO</span>
+            </div>
+
+            <ul class="nav-links">
+                <li><a href="#" id="nav-dashboard" class="active" onclick="switchTab('dashboard')">Monitor</a></li>
+                <li><a href="#" id="nav-settings" onclick="switchTab('settings')">Config</a></li>
+                <li><a href="#" id="nav-logs" onclick="switchTab('logs')">Audit</a></li>
+            </ul>
+
+            <div class="system-status">
+                <div class="status-item">
+                    <span class="label">GPU</span>
+                    <span class="value" id="gpu-name">Detecting...</span>
+                </div>
+                <div class="status-item">
+                    <span class="label">Backend</span>
+                    <span class="value" id="io-backend">--</span>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Workspace -->
+        <main class="content-area">
+
+            <!-- Header -->
+            <header class="top-bar">
+                <div class="title-section">
+                    <h1 id="page-title">Operational Overview</h1>
+                    <div id="sim-badge" class="badge warning" style="display: none;">SIMULATION MODE</div>
+                </div>
+                <div class="live-status">
+                    <span class="pulse"></span> LIVE
+                </div>
+            </header>
+
+            <!-- VIEW: DASHBOARD -->
+            <div id="view-dashboard" class="view-panel active">
+
+                <!-- Topology Section (The "Eye Candy") -->
+                <div class="hero-section">
+                    <div class="topology-card glass-panel">
+                        <div class="card-header">
+                            <h3>Neural Topology</h3>
+                            <span class="subtitle">Live I/O Flow Visualization</span>
+                        </div>
+                        <canvas id="topologyCanvas"></canvas>
+                    </div>
+
+                    <!-- Key Metrics (Right of Topology) -->
+                    <div class="hero-metrics">
+                        <div class="glass-panel metric-card accent-blue">
+                            <span class="metric-label">Effective Speed</span>
+                            <span class="metric-value" id="speed-val">0.00</span>
+                            <span class="metric-unit">GB/s</span>
+                        </div>
+                        <div class="glass-panel metric-card accent-purple">
+                            <span class="metric-label">Dedupe Ratio</span>
+                            <span class="metric-value" id="dedup-ratio">1.0x</span>
+                            <span class="metric-unit">Efficiency</span>
+                        </div>
+                        <div class="glass-panel metric-card accent-green">
+                            <span class="metric-label">Cost Savings</span>
+                            <span class="metric-value" id="money-saved">$0.00</span>
+                            <span class="metric-unit">Est. Lifetime</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Secondary Metrics Grid -->
+                <div class="grid-row">
+                    <div class="glass-panel chart-card" style="flex: 2;">
+                        <h3>Throughput History</h3>
+                        <div class="chart-wrapper">
+                            <canvas id="speedChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="glass-panel table-card" style="flex: 1;">
+                        <h3>Recent Transactions</h3>
+                        <table class="minimal-table">
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>File</th>
+                                    <th>Size</th>
+                                </tr>
+                            </thead>
+                            <tbody id="log-table-body">
+                                <!-- JS Populated -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW: SETTINGS (Simplified for brevity, glass styled) -->
+            <div id="view-settings" class="view-panel" style="display: none;">
+                <div class="glass-panel config-panel">
+                    <h2>System Configuration</h2>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>I/O Strategy</label>
+                            <select id="cfg-strategy">
+                                <option value="DIRECT">DIRECT (Unified Memory)</option>
+                                <option value="BUFFERED">BUFFERED (System RAM)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Chunk Size (MB)</label>
+                            <input type="number" id="cfg-chunk">
+                        </div>
+                        <div class="form-group">
+                            <label style="display:flex; align-items:center; gap:0.5rem;">
+                                VRAM Budget (MB)
+                                <span id="vram-mode-badge" style="font-size:0.7rem; padding:0.1rem 0.5rem; border-radius:99px; background:rgba(0,242,255,0.15); color:#00f2ff; font-weight:600; letter-spacing:0.05em;">AUTO</span>
+                            </label>
+                            <div style="display:flex; gap:0.5rem; align-items:center;">
+                                <input type="number" id="cfg-vram" style="flex:1;" placeholder="Auto-detected" oninput="onVramManualEdit()">
+                                <button id="vram-auto-btn" onclick="resetVramToAuto()" title="Let NeuralIO auto-detect optimal VRAM budget from GPU" style="white-space:nowrap; padding:0.4rem 0.8rem; border-radius:0.4rem; background:rgba(0,242,255,0.1); border:1px solid rgba(0,242,255,0.3); color:#00f2ff; cursor:pointer; font-size:0.8rem; transition:background 0.2s;" onmouseover="this.style.background='rgba(0,242,255,0.2)'" onmouseout="this.style.background='rgba(0,242,255,0.1)'">⟳ Auto</button>
+                            </div>
+                            <div id="vram-hint" style="font-size:0.75rem; color:#6b7280; margin-top:0.3rem;"></div>
+                        </div>
+                        <div class="form-group">
+                            <label>I/O Threads</label>
+                            <input type="number" id="cfg-threads">
+                        </div>
+                        <div class="form-group full-width">
+                            <button class="btn-primary" onclick="saveSettings()">Save Configuration</button>
+                            <span id="cfg-msg" class="success-msg"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW: LOGS -->
+            <div id="view-logs" class="view-panel" style="display: none;">
+                <div class="glass-panel full-table-panel">
+                    <div class="panel-header">
+                        <h2>Audit Trail</h2>
+                        <div class="actions">
+                            <button class="btn-secondary" onclick="exportCSV()">Export JSONL</button>
+                            <button class="btn-danger" onclick="clearLogs()">Clear</button>
+                        </div>
+                    </div>
+                    <div class="table-scroll">
+                        <table class="full-table">
+                            <thead>
+                                <tr>
+                                    <th>Timestamp</th>
+                                    <th>Filename</th>
+                                    <th>Size (MB)</th>
+                                    <th>Speed (GB/s)</th>
+                                    <th>Latency (ms)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="full-log-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+    <script src="client.js?v=2.1.6"></script>
+</body>
+
+</html>
