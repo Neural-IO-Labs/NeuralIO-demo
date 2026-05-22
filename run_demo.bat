@@ -1,4 +1,5 @@
 @echo off
+cd /d "%~dp0"
 title Neural:IO Labs - Standalone Evaluation Suite
 color 0B
 
@@ -29,7 +30,7 @@ if %errorlevel% neq 0 (
 
 :: Create Virtual Environment
 if not exist "venv" (
-    echo [System] Creating local virtual environment (venv)...
+    echo [System] Creating local virtual environment ^(venv^)...
     python -m venv venv
     if %errorlevel% neq 0 (
         echo [ERROR] Failed to create virtual environment.
@@ -51,23 +52,34 @@ if %errorlevel% neq 0 (
 )
 
 echo [System] Attempting to install PyTorch for hardware CUDA execution...
-pip install torch
+pip install torch --index-url https://download.pytorch.org/whl/cu121
 if %errorlevel% neq 0 (
-    echo [INFO] PyTorch not installed. The benchmark will run in Safe fall-back mode (simulated).
+    echo.
+    echo ==============================================================
+    echo [WARNING] PyTorch or CUDA installation failed!
+    echo Neural:IO relies on PyTorch and CUDA to benchmark physical SSDs.
+    echo The suite will now fall back to CPU-simulated 'Safe Mode'.
+    echo NOTE: Performance numbers in Safe Mode are simulated and do NOT
+    echo reflect the true 1.6+ GB/s speed of the C++ engine.
+    echo ==============================================================
+    echo.
 )
 
 :: Detect Python version for C++ binary linking
-python -c "import sys; sys.exit(12 if sys.version_info[:2] == (3,12) else (13 if sys.version_info[:2] == (3,13) else 0))"
-set PY_VER_CODE=%errorlevel%
+echo %PY_VER% | findstr /R "3\.12" >nul
+if %errorlevel% equ 0 set PY_VER_CODE=12
+
+echo %PY_VER% | findstr /R "3\.13" >nul
+if %errorlevel% equ 0 set PY_VER_CODE=13
 
 if "%PY_VER_CODE%"=="12" (
     echo [System] Aligning pre-compiled C++ extension for Python 3.12...
-    copy /y "bin\windows\neuralio_formula1.cp312-win_amd64.pyd" "neuralio_final.pyd" >nul
+    copy /y "bin\windows\neuralio_final.cp312-win_amd64.pyd" "neuralio_final.pyd" >nul
 ) else if "%PY_VER_CODE%"=="13" (
     echo [System] Aligning pre-compiled C++ extension for Python 3.13...
     copy /y "bin\windows\neuralio_final.cp313-win_amd64.pyd" "neuralio_final.pyd" >nul
 ) else (
-    echo [WARNING] No pre-compiled binary matches Python %PY_VER%. 
+    echo [WARNING] No pre-compiled binary matches Python %PY_VER% on Windows. 
     echo Falling back to pure Python safe-mode.
 )
 
@@ -88,9 +100,17 @@ echo.
 echo Press any key to start the Neural:IO suite...
 pause >nul
 
-:: Launch browser in background
+:: Launch uvicorn dashboard in background
+echo [Launch] Starting telemetry dashboard server...
+start /B python -m uvicorn dashboard.main:app --port 8000 >nul 2>nul
+
+:: Wait 3 seconds to let uvicorn start up
+ping 127.0.0.1 -n 4 > nul
+
+:: Launch browser
 start "" http://localhost:8000
 
-:: Run the benchmark in background if supported, or sequentially
-echo [Launch] Starting telemetry dashboard server...
-python -m uvicorn dashboard.main:app --port 8000
+:: Run the benchmark loop
+echo [Launch] Executing benchmark...
+python benchmark_neuralio.py
+pause

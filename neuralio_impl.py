@@ -30,8 +30,7 @@ class NeuralIOStorage:
                 "vram_budget_mb": int(vram_budget / (1024**2)),
                 "io_strategy": kwargs.get("io_strategy", "BUFFERED"),  
                 "io_threads": kwargs.get("io_threads", 4),
-                "compression": kwargs.get("compression", False),
-                "compression_enabled": kwargs.get("compression_enabled", False),
+                "compression_algo": kwargs.get("compression_algo", "none"),
                 "vault_dirs": kwargs.get("vault_dirs", [])
             }
             
@@ -49,7 +48,7 @@ class NeuralIOStorage:
             self.engine = None
         self.last_save_metrics = {}
 
-    def save(self, tensor, filename, rank=-1):
+    def save(self, tensor, filename, rank=-1, synchronous=False):
         if self.engine is None:
              # Falling back to torch.save (usually standard PyTorch speed)
              final_name = filename
@@ -84,8 +83,10 @@ class NeuralIOStorage:
             self.engine.save_tensor_sharded(ptr, size, filename, rank)
             
             end_event.record()
-            torch.cuda.synchronize()
-            elapsed_ms = start_event.elapsed_time(end_event)
+            elapsed_ms = 0.0
+            if synchronous:
+                torch.cuda.synchronize()
+                elapsed_ms = start_event.elapsed_time(end_event)
             
             cpp_metrics = self.engine.last_save_metrics
             self.last_save_metrics = dict(cpp_metrics)

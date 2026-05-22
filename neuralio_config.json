@@ -1,0 +1,1 @@
+{"calibrated": true, "io_strategy": "BUFFERED", "io_threads": 8, "chunk_size": 1048576, "vram_budget_mb": 4096, "compression": false, "compression_enabled": false, "vault_dirs": []}

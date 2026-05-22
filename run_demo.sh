@@ -47,15 +47,17 @@ if [ $? -ne 0 ]; then
     echo -e "${YELLOW}[WARNING] Dependency installation encountered issues. Checking fallback...${NC}"
 fi
 
+cd "$(dirname "$0")"
+
 # Detect Python version and install correct wheel
 PY_MAJOR_MINOR=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
 
 if [ "$PY_MAJOR_MINOR" == "3.11" ]; then
     echo -e "${CYAN}[System] Installing pre-compiled C++ accelerated wheel for Python 3.11 (Linux x86_64)...${NC}"
-    pip install bin/linux/neuralio-2.2.5-cp311-cp311-linux_x86_64.whl
+    pip install "$(dirname "$0")/bin/linux/"*cp311*.whl
 elif [ "$PY_MAJOR_MINOR" == "3.10" ]; then
     echo -e "${CYAN}[System] Installing pre-compiled AMD ROCm wheel for Python 3.10 (Linux x86_64)...${NC}"
-    pip install bin/linux/neuralio_amd-2.3.0+amd-cp310-cp310-linux_x86_64.whl
+    pip install "$(dirname "$0")/bin/linux/"*cp310*.whl
 else
     echo -e "${YELLOW}[WARNING] No exact match wheel found for Python $PY_VER (requires 3.10 or 3.11 for C++ acceleration).${NC}"
     echo -e "Evaluating pure Python safe-mode fallback."
@@ -81,9 +83,17 @@ echo -e "${GREEN} PRE-FLIGHT CHECKS COMPLETED SUCCESSFULLY${NC}"
 echo -e "${CYAN}==============================================================${NC}"
 echo -e "[Launch] 1. Starting Local Hardware Performance Benchmark Loop..."
 echo -e "[Launch] 2. Starting visual telemetry dashboard on http://localhost:8000"
-echo.
+echo ""
 echo -e "Press [Enter] to start the Neural:IO suite..."
 read
+
+# Run uvicorn server in background
+echo -e "[Launch] Starting telemetry dashboard server..."
+python3 -m uvicorn dashboard.main:app --port 8000 &> /dev/null &
+UVICORN_PID=$!
+
+# Wait 3 seconds
+sleep 3
 
 # Attempt to open browser (Linux-friendly open)
 if command -v xdg-open &> /dev/null; then
@@ -92,5 +102,9 @@ elif command -v gnome-open &> /dev/null; then
     gnome-open http://localhost:8000 &
 fi
 
-# Run uvicorn server
-python3 -m uvicorn dashboard.main:app --port 8000
+# Run the benchmark loop
+echo -e "[Launch] Executing benchmark..."
+python3 benchmark_neuralio.py
+
+# When benchmark ends, kill dashboard
+kill $UVICORN_PID 2>/dev/null

@@ -15,14 +15,14 @@ Neural:IO is a compiled C++ asynchronous sharding/deduplication checkpointing li
 2. **Dynamic CDC Deduplication:** Up to 10x savings on redundant weights (LLaMA fine-tuning and LoRA states).
 3. **Dual-Platform Native Fat-Binaries:** Includes `.pyd` files for Windows (Python 3.12–3.13) and `.whl` files for Linux (Python 3.10–3.11, CUDA & ROCm).
 4. **Visual Telemetry Dashboard:** Launches a local web GUI displaying real-time memory throughput, NVMe wear avoidance, and cloud egress bypass stats.
-5. **Time-Locked Global Key:** Pre-loaded evaluation trial license (`license.key`) valid for execution on any hardware until early 2027.
+5. **Time-Locked Global Key:** Pre-loaded evaluation trial license (`license.key`) valid for 14-day execution on any hardware.
 
 ---
 
 ## 🛠️ System Requirements
 
 - **Operating System:** Windows 10/11 or Ubuntu Linux (20.04+ recommended)
-- **Python:** 3.10, 3.11, 3.12, or 3.13
+- **Python:** 3.11 (Linux), 3.12, or 3.13 (Windows)
 - **Hardware:**
   - **Accelerated Mode:** NVIDIA GPU (RTX 30/40/50 series, A100, H100, B200) or AMD GPU (MI250X, MI300X) with CUDA/ROCm installed.
   - **Fallback Mode:** Standard CPU systems are fully supported (runs simulated GPU memory-mapping for telemetry demonstration).
@@ -57,20 +57,20 @@ Inside the package, you will find `benchmark_neuralio.py` which benchmarks Neura
 
 The autostrapper will trigger this benchmark automatically. If you wish to configure parameters manually (e.g. model parameters, VRAM budgets, chunking sizes), run:
 ```bash
-python benchmark_neuralio.py --model_size_gb 140 --vram_budget_mb 4096
+python benchmark_neuralio.py --no_gpu
 ```
 
 ### Options:
-- `--model_size_gb`: Size of model weights to save (default: 140 GB representing a LLaMA-70B model).
-- `--vram_budget_mb`: Limit of host register memory to allocate for asynchronous pooling (default: 4096 MB).
 - `--no_gpu`: Force safe-mode CPU fallback (useful for system tests).
+
+You can also use `deepspeed_bridge.py` to seamlessly integrate Neural:IO with Hugging Face Accelerate and DeepSpeed ZeRO checkpointing.
 
 ---
 
 ## 🔒 Security & Intellectual Property
 
 1. **No C++ Source Leakage:** All source files (`.cpp`, `.h`) have been compiled and stripped. No proprietary C++ logic is distributed in this evaluation bundle.
-2. **Remote Bypassed Trial:** The packaged `license.key` is specifically configured with `"hwid": "ANY"` and a remote diagnostic flag so clients can evaluate the code completely offline, without sending telemetric telemetry back to our servers.
+2. **Remote Bypassed Trial:** The packaged `license.key` is specifically configured with `"hwid": "ANY"` and a remote diagnostic flag so clients can evaluate the code completely offline, without sending telemetric diagnostic data back to our servers.
 3. **Virus-Free & Signed:** Binaries are statically verified and compiled in a secure, isolated workspace.
 
 ---
@@ -79,7 +79,7 @@ python benchmark_neuralio.py --model_size_gb 140 --vram_budget_mb 4096
 
 For enterprise production use (multi-node GPU clusters, multi-gigabyte models, customized NVLink/ROCm interconnect tuning), please contact Labs engineering at:
 
-✉️ **tuomas@neuralio-labs.com**
+✉️ **support@neuralio-labs.com**
 
 We will provide a custom commercial license key (`license.key`) tuned for your specific hardware topology, storage backends (AWS, GCP, Azure, or Cloudflare R2), and priority engineering support.
 

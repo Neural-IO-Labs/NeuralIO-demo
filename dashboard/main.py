@@ -5,7 +5,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import json
 import os
-import torch
+try:
+    import torch
+    HAS_TORCH = True
+except ImportError:
+    HAS_TORCH = False
 import time
 import glob
 from typing import List, Dict, Optional
@@ -13,7 +17,8 @@ from datetime import datetime
 from fastapi.responses import FileResponse
 
 # --- Config ---
-LOG_FILE = "neuralio_dashboard.jsonl"
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+LOG_FILE = os.path.join(BASE_DIR, "neuralio_dashboard.jsonl")
 DEBUG_MODE = False
 
 app = FastAPI(title="NeuralIO Inspector")
@@ -74,8 +79,8 @@ def get_config():
     
     # 2. Sync with Disk
     try:
-        if os.path.exists("neuralio_config.json"):
-            with open("neuralio_config.json", 'r') as f:
+        if os.path.exists(CONFIG_FILE):
+            with open(CONFIG_FILE, 'r') as f:
                 disk_cfg = json.load(f)
                 config.update(disk_cfg)
     except:
@@ -93,7 +98,7 @@ def save_config(new_settings: SettingsModel):
     current["webhook_url"] = new_settings.webhook_url
     current["straggler_threshold"] = new_settings.straggler_threshold
     
-    with open("neuralio_config.json", 'w') as f:
+    with open(CONFIG_FILE, 'w') as f:
         json.dump(current, f, indent=4)
 
 import hashlib
@@ -119,8 +124,11 @@ def get_gpu_hourly_rate(gpu_name: str) -> float:
 def get_system_hwid() -> str:
     try:
         gpu_name = ""
-        if torch.cuda.is_available():
-            gpu_name = torch.cuda.get_device_name(0)
+        if HAS_TORCH and torch.cuda.is_available():
+            try:
+                gpu_name = torch.cuda.get_device_name(0)
+            except:
+                pass
     except:
         gpu_name = ""
     raw = f"{platform.processor()}-{socket.gethostname()}-{platform.system()}-{gpu_name}"
@@ -135,8 +143,8 @@ def calculate_lifetime_and_status():
     # Default: $0.07 = RunPod NVMe baseline (more accurate than S3 for GPU workloads)
     storage_rate = 0.07
     try:
-        if os.path.exists("neuralio_config.json"):
-            with open("neuralio_config.json") as _cf:
+        if os.path.exists(CONFIG_FILE):
+            with open(CONFIG_FILE) as _cf:
                 storage_rate = json.load(_cf).get("roi_storage_cost_per_gb", 0.07)
     except: pass
     
@@ -228,8 +236,6 @@ def calculate_lifetime_and_status():
     
     global_ratio = total_seen_mb / written_mb
     status["dedup"] = global_ratio
-
-    return total_mb, total_roi, status
 
     return total_mb, total_roi, status
 

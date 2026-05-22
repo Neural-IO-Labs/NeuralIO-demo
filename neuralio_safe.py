@@ -26,14 +26,12 @@ class CloudStorageClient:
         self.bucket = bucket
         
     def upload_file(self, local_path, cloud_key):
+        import requests
         try:
             url = f"{self.endpoint_url}/bucket/{cloud_key}"
             with open(local_path, 'rb') as f:
-                data = f.read()
-            req = urllib.request.Request(url, data=data, method='PUT')
-            req.add_header('Content-Type', 'application/octet-stream')
-            with urllib.request.urlopen(req) as response:
-                return response.status == 200
+                response = requests.put(url, data=f, headers={'Content-Type': 'application/octet-stream'})
+            return response.status_code == 200
         except Exception as e:
             warnings.warn(f"[NeuralIO] Cloud Upload Error for {cloud_key}: {e}")
             return False
@@ -77,8 +75,7 @@ class NeuralIOManager:
             "s3_bucket": None,
             "s3_endpoint_url": None,
             "zero_disk_cloud": False,
-            "compression": False,
-            "compression_enabled": False,
+            "compression_algo": "none",
             "vault_dirs": []
         }
 
@@ -118,8 +115,7 @@ class NeuralIOManager:
             vram_bytes,
             io_strategy=self.io_backend,
             io_threads=self.config.get("io_threads", 4),
-            compression=self.config.get("compression", False),
-            compression_enabled=self.config.get("compression_enabled", False),
+            compression_algo=self.config.get("compression_algo", "none"),
             vault_dirs=self.config.get("vault_dirs", [])
         )
 
@@ -178,8 +174,7 @@ class NeuralIOManager:
             vram_bytes,
             io_strategy=self.io_backend,
             io_threads=self.config.get("io_threads", 4),
-            compression=self.config.get("compression", False),
-            compression_enabled=self.config.get("compression_enabled", False),
+            compression_algo=self.config.get("compression_algo", "none"),
             vault_dirs=self.config.get("vault_dirs", [])
         )
 
@@ -193,7 +188,7 @@ class NeuralIOManager:
                     warnings_list.append(f"Straggler: {io_time:.1f}ms")
         return warnings_list
 
-    def save(self, tensor, filename, rank=None):
+    def save(self, obj, filename, rank=None):
         if rank is None:
             rank = -1
             if torch.distributed.is_available() and torch.distributed.is_initialized():
@@ -202,7 +197,13 @@ class NeuralIOManager:
                 try: rank = int(os.environ["RANK"])
                 except: pass
         
-        total_bytes = tensor.numel() * tensor.element_size()
+        total_bytes = 0
+        if isinstance(obj, torch.Tensor):
+            total_bytes = obj.numel() * obj.element_size()
+        elif isinstance(obj, dict):
+            for k, v in obj.items():
+                if isinstance(v, torch.Tensor):
+                    total_bytes += v.numel() * v.element_size()
         
         # Multi-cloud direct streaming setup
         if self.cloud_client:
@@ -220,8 +221,11 @@ class NeuralIOManager:
                     stagger = self.config.get("stagger_write_ms", 50)
                     if stagger > 0: _time.sleep((rank * stagger) / 1000.0)
 
+                if not isinstance(obj, torch.Tensor):
+                    raise ValueError("NeuralIO engine only supports single torch.Tensor saving. Falling back.")
+
                 # HANDOFF: C++ Broker starts working 
-                self.engine.save(tensor, target_file, rank)
+                self.engine.save(obj, target_file, rank)
                 
                 try:
                     # Async Metrics: These report what the Broker just SAW (Dedupe stats)
@@ -264,7 +268,7 @@ class NeuralIOManager:
                     warnings.warn(f"[NeuralIO] Final Failure: {e}")
 
         # Fallback to standard torch.save if everything fails
-        _REAL_TORCH_SAVE(tensor, filename)
+        _REAL_TORCH_SAVE(obj, filename)
 
     def load(self, filename, tensor):
         """Accelerated restoration of a tensor from a NeuralIO recipe."""

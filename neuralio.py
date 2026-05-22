@@ -1,6 +1,9 @@
 # NeuralIO - The "Zero Config" Entry Point
 import sys
-import torch
+try:
+    import torch
+except ImportError:
+    torch = None
 import neuralio_safe
 import time
 import os
@@ -18,9 +21,12 @@ def _get_manager():
 import pickle
 
 # --- Monkey Patch Logic ---
-_ORIGINAL_SAVE = torch.save
+if torch is not None:
+    _ORIGINAL_SAVE = torch.save
+else:
+    _ORIGINAL_SAVE = None
 
-def neuralio_save(obj, f, pickle_module=pickle, pickle_protocol=2, _use_new_zipfile_serialization=True):
+def neuralio_save(obj, f, *args, **kwargs):
     """
     Patched torch.save that accelerates large CUDA tensors via NeuralIO.
     Everything else falls back to standard torch.save.
@@ -29,7 +35,7 @@ def neuralio_save(obj, f, pickle_module=pickle, pickle_protocol=2, _use_new_zipf
     # Condition: Object is a Tensor, is on CUDA, and "f" is a filename (string)
     is_acceleratable = False
     
-    if isinstance(obj, torch.Tensor) and obj.is_cuda and isinstance(f, str):
+    if torch is not None and isinstance(obj, torch.Tensor) and obj.is_cuda and isinstance(f, str):
         # Optional: Size threshold?
         # For now, accelerate all CUDA tensors.
         is_acceleratable = True
@@ -44,8 +50,9 @@ def neuralio_save(obj, f, pickle_module=pickle, pickle_protocol=2, _use_new_zipf
             print(f"[NeuralIO] Acceleration failed ({e}). Falling back to standard save.")
             
     # 2. Fallback to original
-    # (Pass all args to ensure compatibility)
-    return _ORIGINAL_SAVE(obj, f, pickle_module, pickle_protocol, _use_new_zipfile_serialization)
+    if _ORIGINAL_SAVE:
+        return _ORIGINAL_SAVE(obj, f, *args, **kwargs)
+    raise ImportError("torch is not available")
 
 def save(obj, f, *args, **kwargs):
     """
@@ -54,7 +61,7 @@ def save(obj, f, *args, **kwargs):
     falls back to standard torch.save.
     """
     mgr = _get_manager()
-    is_acceleratable = isinstance(obj, torch.Tensor) and obj.is_cuda and isinstance(f, str)
+    is_acceleratable = torch is not None and isinstance(obj, torch.Tensor) and obj.is_cuda and isinstance(f, str)
     if is_acceleratable:
         try:
             mgr.save(obj, f)
@@ -63,7 +70,9 @@ def save(obj, f, *args, **kwargs):
             print(f"[NeuralIO] SDK Save failed: {e}. Falling back to standard torch.save.")
             
     # Fallback to standard torch.save
-    return _ORIGINAL_SAVE(obj, f, *args, **kwargs)
+    if _ORIGINAL_SAVE:
+        return _ORIGINAL_SAVE(obj, f, *args, **kwargs)
+    raise ImportError("torch is not available")
 
 def patch():
     """Activates the monkey patch on torch.save."""
